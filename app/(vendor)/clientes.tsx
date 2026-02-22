@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
-  Linking,
   Alert,
   ScrollView,
 } from "react-native";
@@ -37,8 +36,14 @@ export default function VendorClientesScreen() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Planificación de ruta
   const [routeMode, setRouteMode] = useState(false);
   const [routeOrder, setRouteOrder] = useState<Customer[]>([]);
+
+  // Ejecución de ruta
+  const [routeActive, setRouteActive] = useState(false);
+  const [routeStep, setRouteStep] = useState(0);
 
   const mapRef = useRef<MapView>(null);
   const { location, getLocation } = useLocation();
@@ -84,26 +89,65 @@ export default function VendorClientesScreen() {
     });
   }
 
-  function openRouteInMaps() {
+  function cancelRoutePlanning() {
+    setRouteMode(false);
+    setRouteOrder([]);
+  }
+
+  function startRoute() {
     if (routeOrder.length === 0) {
       Alert.alert("Sin clientes", "Selecciona al menos un cliente para la ruta.");
       return;
     }
+    setRouteStep(0);
+    setRouteActive(true);
 
-    const destination = routeOrder[routeOrder.length - 1];
-    const destinationStr = `${destination.lat},${destination.lng}`;
-    const waypoints = routeOrder
-      .slice(0, -1)
-      .map((c) => `${c.lat},${c.lng}`)
-      .join("|");
-
-    let url = `https://www.google.com/maps/dir/?api=1&destination=${destinationStr}`;
-    if (location) url += `&origin=${location.lat},${location.lng}`;
-    if (waypoints) url += `&waypoints=${waypoints}`;
-
-    Linking.openURL(url).catch(() =>
-      Alert.alert("Error", "No se pudo abrir Google Maps")
+    // Centrar mapa en el primer cliente
+    const first = routeOrder[0];
+    mapRef.current?.animateToRegion(
+      {
+        latitude: first.lat,
+        longitude: first.lng,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
+      },
+      500
     );
+  }
+
+  function visitCurrentCustomer() {
+    const customer = routeOrder[routeStep];
+    router.push(`/(vendor)/visit/${customer.id}`);
+  }
+
+  function nextStop() {
+    if (routeStep < routeOrder.length - 1) {
+      const next = routeOrder[routeStep + 1];
+      setRouteStep((s) => s + 1);
+      // Centrar mapa en la siguiente parada
+      mapRef.current?.animateToRegion(
+        {
+          latitude: next.lat,
+          longitude: next.lng,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        },
+        500
+      );
+    } else {
+      Alert.alert(
+        "Ruta completada",
+        "¡Terminaste todas las paradas de la ruta!",
+        [{ text: "OK", onPress: finishRoute }]
+      );
+    }
+  }
+
+  function finishRoute() {
+    setRouteActive(false);
+    setRouteMode(false);
+    setRouteOrder([]);
+    setRouteStep(0);
   }
 
   if (loading) {
@@ -124,9 +168,11 @@ export default function VendorClientesScreen() {
         }
       : DEFAULT_REGION;
 
+  const currentCustomer = routeActive ? routeOrder[routeStep] : null;
+
   return (
     <View style={styles.container}>
-      {/* Mapa con controles flotantes */}
+      {/* Mapa */}
       <View style={styles.mapContainer}>
         <MapView
           ref={mapRef}
@@ -135,20 +181,42 @@ export default function VendorClientesScreen() {
           showsUserLocation={true}
           showsMyLocationButton={false}
         >
-          {customers.map((c) => (
-            <Marker
-              key={c.id}
-              coordinate={{ latitude: c.lat, longitude: c.lng }}
-              title={c.name}
-              description={
-                c.daysSinceVisit != null
-                  ? `${c.daysSinceVisit} días sin visita`
-                  : "Sin visitas registradas"
+          {customers.map((c) => {
+            // Color del pin según estado de ruta
+            let pinColor = PIN_COLORS[c.coldStatus];
+            if (routeActive) {
+              const idx = routeOrder.findIndex((r) => r.id === c.id);
+              if (idx >= 0) {
+                if (idx < routeStep) pinColor = "#9ca3af";         // completada
+                else if (idx === routeStep) pinColor = "#1e40af";  // actual
+                else pinColor = "#93c5fd";                          // pendiente en ruta
               }
-              pinColor={PIN_COLORS[c.coldStatus]}
-              onCalloutPress={() => router.push(`/(vendor)/visit/${c.id}`)}
-            />
-          ))}
+            } else if (routeMode) {
+              const idx = routeOrder.findIndex((r) => r.id === c.id);
+              if (idx >= 0) pinColor = "#1e40af";
+            }
+
+            return (
+              <Marker
+                key={c.id}
+                coordinate={{ latitude: c.lat, longitude: c.lng }}
+                title={c.name}
+                description={
+                  c.daysSinceVisit != null
+                    ? `${c.daysSinceVisit} días sin visita`
+                    : "Sin visitas registradas"
+                }
+                pinColor={pinColor}
+                onCalloutPress={() => {
+                  if (routeMode && !routeActive) {
+                    toggleRouteCustomer(c);
+                  } else if (!routeActive) {
+                    router.push(`/(vendor)/visit/${c.id}`);
+                  }
+                }}
+              />
+            );
+          })}
         </MapView>
 
         {/* Botón Mi ubicación */}
@@ -156,31 +224,29 @@ export default function VendorClientesScreen() {
           <Text style={styles.myLocationIcon}>📍</Text>
         </TouchableOpacity>
 
-        {/* Botón Armar ruta */}
-        <TouchableOpacity
-          style={[styles.routeModeBtn, routeMode && styles.routeModeBtnActive]}
-          onPress={() => {
-            if (routeMode) {
-              setRouteMode(false);
-              setRouteOrder([]);
-            } else {
-              setRouteMode(true);
-            }
-          }}
-        >
-          <Text
-            style={[
-              styles.routeModeBtnText,
-              routeMode && styles.routeModeBtnTextActive,
-            ]}
+        {/* Botón Armar / Cancelar ruta (solo en fase de planificación) */}
+        {!routeActive && (
+          <TouchableOpacity
+            style={[styles.routeModeBtn, routeMode && styles.routeModeBtnActive]}
+            onPress={() => {
+              if (routeMode) cancelRoutePlanning();
+              else setRouteMode(true);
+            }}
           >
-            {routeMode ? "Cancelar" : "Armar ruta"}
-          </Text>
-        </TouchableOpacity>
+            <Text
+              style={[
+                styles.routeModeBtnText,
+                routeMode && styles.routeModeBtnTextActive,
+              ]}
+            >
+              {routeMode ? "Cancelar" : "Armar ruta"}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Panel de ruta activa */}
-      {routeMode && (
+      {/* ── Panel de planificación ── */}
+      {routeMode && !routeActive && (
         <View style={styles.routePanel}>
           <ScrollView
             horizontal
@@ -204,19 +270,86 @@ export default function VendorClientesScreen() {
                   <Text style={styles.routeChipName} numberOfLines={1}>
                     {c.name}
                   </Text>
+                  <Text style={styles.routeChipRemove}>✕</Text>
                 </TouchableOpacity>
               ))
             )}
           </ScrollView>
           {routeOrder.length > 0 && (
-            <TouchableOpacity style={styles.openMapsBtn} onPress={openRouteInMaps}>
-              <Text style={styles.openMapsBtnText}>Abrir en Maps</Text>
+            <TouchableOpacity style={styles.startRouteBtn} onPress={startRoute}>
+              <Text style={styles.startRouteBtnText}>
+                ▶ Iniciar ruta ({routeOrder.length} paradas)
+              </Text>
             </TouchableOpacity>
           )}
         </View>
       )}
 
-      {/* Lista de clientes ordenados por cliente más frío */}
+      {/* ── Panel de ejecución de ruta ── */}
+      {routeActive && currentCustomer && (
+        <View style={styles.activeRoutePanel}>
+          <View style={styles.activeRouteHeader}>
+            <View>
+              <Text style={styles.activeRouteLabel}>
+                Parada {routeStep + 1} de {routeOrder.length}
+              </Text>
+              {/* Indicadores de progreso */}
+              <View style={styles.progressDots}>
+                {routeOrder.map((_, idx) => (
+                  <View
+                    key={idx}
+                    style={[
+                      styles.progressDot,
+                      idx < routeStep && styles.progressDotDone,
+                      idx === routeStep && styles.progressDotCurrent,
+                    ]}
+                  />
+                ))}
+              </View>
+            </View>
+            <TouchableOpacity style={styles.finishRouteBtn} onPress={() =>
+              Alert.alert(
+                "Finalizar ruta",
+                "¿Quieres terminar la ruta ahora?",
+                [
+                  { text: "Continuar", style: "cancel" },
+                  { text: "Finalizar", style: "destructive", onPress: finishRoute },
+                ]
+              )
+            }>
+              <Text style={styles.finishRouteBtnText}>✕ Salir</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.activeRouteName} numberOfLines={1}>
+            {currentCustomer.name}
+          </Text>
+          {currentCustomer.address ? (
+            <Text style={styles.activeRouteAddress} numberOfLines={1}>
+              📍 {currentCustomer.address}
+            </Text>
+          ) : null}
+
+          <View style={styles.activeRouteBtns}>
+            <TouchableOpacity
+              style={styles.visitBtn}
+              onPress={visitCurrentCustomer}
+            >
+              <Text style={styles.visitBtnText}>Visitar cliente →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.nextStopBtn}
+              onPress={nextStop}
+            >
+              <Text style={styles.nextStopBtnText}>
+                {routeStep < routeOrder.length - 1 ? "Saltar parada" : "Finalizar"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Lista de clientes */}
       <FlatList
         style={styles.list}
         data={customers}
@@ -232,11 +365,21 @@ export default function VendorClientesScreen() {
         }
         renderItem={({ item }) => {
           const routeIdx = routeOrder.findIndex((c) => c.id === item.id);
+          const isCurrent = routeActive && routeIdx === routeStep;
+          const isDone = routeActive && routeIdx >= 0 && routeIdx < routeStep;
+
           return (
-            <View>
+            <View style={isDone && styles.doneItemWrapper}>
               <CustomerCard
                 customer={item}
                 onPress={() => {
+                  if (routeActive) {
+                    // En modo activo solo permite visitar el cliente actual
+                    if (isCurrent) {
+                      visitCurrentCustomer();
+                    }
+                    return;
+                  }
                   if (routeMode) {
                     toggleRouteCustomer(item);
                   } else {
@@ -244,9 +387,28 @@ export default function VendorClientesScreen() {
                   }
                 }}
               />
-              {routeMode && routeIdx >= 0 && (
-                <View style={styles.routeNumBadge} pointerEvents="none">
+              {/* Badge de número de parada */}
+              {routeIdx >= 0 && !isDone && (
+                <View
+                  style={[
+                    styles.routeNumBadge,
+                    isCurrent && styles.routeNumBadgeCurrent,
+                  ]}
+                  pointerEvents="none"
+                >
                   <Text style={styles.routeNumText}>{routeIdx + 1}</Text>
+                </View>
+              )}
+              {/* Badge de completado */}
+              {isDone && (
+                <View style={styles.doneNumBadge} pointerEvents="none">
+                  <Text style={styles.doneNumText}>✓</Text>
+                </View>
+              )}
+              {/* Indicador de parada actual */}
+              {isCurrent && (
+                <View style={styles.currentStopIndicator} pointerEvents="none">
+                  <Text style={styles.currentStopText}>PARADA ACTUAL</Text>
                 </View>
               )}
             </View>
@@ -307,7 +469,7 @@ const styles = StyleSheet.create({
   routeModeBtnText: { fontSize: 13, fontWeight: "700", color: "#1e40af" },
   routeModeBtnTextActive: { color: "#fff" },
 
-  // Panel de ruta
+  // ── Panel de planificación ──
   routePanel: {
     backgroundColor: "#fff",
     paddingVertical: 10,
@@ -340,15 +502,73 @@ const styles = StyleSheet.create({
   },
   routeChipBadgeText: { color: "#fff", fontSize: 11, fontWeight: "700" },
   routeChipName: { fontSize: 13, fontWeight: "600", color: "#1e40af", maxWidth: 100 },
-  openMapsBtn: {
-    backgroundColor: "#16a34a",
+  routeChipRemove: { fontSize: 11, color: "#93c5fd" },
+  startRouteBtn: {
+    backgroundColor: "#1e40af",
     borderRadius: 8,
     padding: 12,
     alignItems: "center",
   },
-  openMapsBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  startRouteBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 
-  // Badge de orden en la lista
+  // ── Panel de ejecución de ruta ──
+  activeRoutePanel: {
+    backgroundColor: "#1e3a8a",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: 6,
+  },
+  activeRouteHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  activeRouteLabel: { color: "#93c5fd", fontSize: 12, fontWeight: "600" },
+  progressDots: { flexDirection: "row", gap: 4, marginTop: 4 },
+  progressDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#3b82f6",
+  },
+  progressDotDone: { backgroundColor: "#22c55e" },
+  progressDotCurrent: { backgroundColor: "#fff", width: 12, height: 12, borderRadius: 6 },
+  finishRouteBtn: {
+    backgroundColor: "#1e40af",
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  finishRouteBtnText: { color: "#93c5fd", fontSize: 12, fontWeight: "700" },
+  activeRouteName: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  activeRouteAddress: { color: "#bfdbfe", fontSize: 13 },
+  activeRouteBtns: { flexDirection: "row", gap: 8, marginTop: 4 },
+  visitBtn: {
+    flex: 1,
+    backgroundColor: "#2563eb",
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  visitBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  nextStopBtn: {
+    backgroundColor: "#1e3a8a",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#3b82f6",
+  },
+  nextStopBtnText: { color: "#93c5fd", fontWeight: "600", fontSize: 13 },
+
+  // Lista — items de ruta
+  doneItemWrapper: { opacity: 0.5 },
   routeNumBadge: {
     position: "absolute",
     top: 10,
@@ -361,5 +581,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     elevation: 4,
   },
+  routeNumBadgeCurrent: { backgroundColor: "#2563eb", width: 30, height: 30, borderRadius: 15 },
   routeNumText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+  doneNumBadge: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#16a34a",
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 4,
+  },
+  doneNumText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+  currentStopIndicator: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#1e40af",
+    paddingVertical: 3,
+    alignItems: "center",
+  },
+  currentStopText: { color: "#fff", fontSize: 10, fontWeight: "700", letterSpacing: 1 },
 });

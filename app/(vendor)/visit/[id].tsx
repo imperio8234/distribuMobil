@@ -29,17 +29,26 @@ const SCHEDULE_OPTIONS = [
   { label: "30 días", days: 30 },
 ];
 
-const DELIVERY_OPTIONS = [
-  { label: "Hoy",             days: 0 },
-  { label: "Mañana",          days: 1 },
-  { label: "Pasado mañana",   days: 2 },
-];
-
-function deliveryISODate(daysFromNow: number): string {
+function startOfToday(): Date {
   const d = new Date();
-  d.setDate(d.getDate() + daysFromNow);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function defaultDeliveryDate(): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
   d.setHours(12, 0, 0, 0);
-  return d.toISOString();
+  return d;
+}
+
+function formatDeliveryDate(d: Date): string {
+  return d.toLocaleDateString("es-CO", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 }
 
 const RESULT_LABEL: Record<VisitResult, string> = {
@@ -69,10 +78,29 @@ export default function VisitScreen() {
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
   const [scheduleDays, setScheduleDays] = useState<number | null>(null);
-  const [deliveryDays, setDeliveryDays] = useState<number | null>(null);
+  const [deliveryDate, setDeliveryDate] = useState<Date | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const { location, getLocation } = useLocation();
+
+  // Al seleccionar "Pedido tomado", inicializar la fecha de entrega en mañana
+  useEffect(() => {
+    if (result === "ORDER_TAKEN" && deliveryDate === null) {
+      setDeliveryDate(defaultDeliveryDate());
+    }
+  }, [result]);
+
+  function shiftDeliveryDate(days: number) {
+    setDeliveryDate((prev) => {
+      const base = prev ?? defaultDeliveryDate();
+      const d = new Date(base);
+      d.setDate(d.getDate() + days);
+      d.setHours(12, 0, 0, 0);
+      // No permitir fechas anteriores a hoy
+      if (d < startOfToday()) return prev;
+      return d;
+    });
+  }
 
   useEffect(() => {
     getLocation();
@@ -122,8 +150,8 @@ export default function VisitScreen() {
         orderAmount: result === "ORDER_TAKEN" ? Number(amount) : undefined,
         notes: notes.trim() || undefined,
         scheduledFor,
-        deliveryDate: result === "ORDER_TAKEN" && deliveryDays !== null
-          ? deliveryISODate(deliveryDays)
+        deliveryDate: result === "ORDER_TAKEN" && deliveryDate
+          ? deliveryDate.toISOString()
           : undefined,
       });
 
@@ -353,31 +381,85 @@ export default function VisitScreen() {
                   placeholderTextColor="#9ca3af"
                 />
 
-                <Text style={styles.sectionTitle}>Fecha de entrega *</Text>
-                <View style={styles.scheduleRow}>
-                  {DELIVERY_OPTIONS.map((opt) => (
-                    <TouchableOpacity
-                      key={opt.days}
-                      style={[
-                        styles.scheduleChip,
-                        deliveryDays === opt.days && styles.deliveryChipActive,
-                      ]}
-                      onPress={() =>
-                        setDeliveryDays(deliveryDays === opt.days ? null : opt.days)
-                      }
-                      activeOpacity={0.8}
-                    >
-                      <Text
-                        style={[
-                          styles.scheduleText,
-                          deliveryDays === opt.days && styles.scheduleTextActive,
-                        ]}
+                <Text style={styles.sectionTitle}>Fecha de entrega</Text>
+                {deliveryDate ? (
+                  <>
+                    <View style={styles.datePicker}>
+                      <TouchableOpacity
+                        style={styles.dateArrow}
+                        onPress={() => shiftDeliveryDate(-1)}
+                        activeOpacity={0.7}
                       >
-                        {opt.label}
-                      </Text>
+                        <Text style={styles.dateArrowText}>◀</Text>
+                      </TouchableOpacity>
+                      <View style={styles.dateDisplay}>
+                        <Text style={styles.dateText} numberOfLines={2}>
+                          {formatDeliveryDate(deliveryDate)}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.dateArrow}
+                        onPress={() => shiftDeliveryDate(1)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.dateArrowText}>▶</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.dateShortcuts}>
+                      {[
+                        { label: "Hoy", days: 0 },
+                        { label: "+3 días", days: 3 },
+                        { label: "+1 sem", days: 7 },
+                        { label: "+15 días", days: 15 },
+                      ].map((s) => {
+                        const target = new Date();
+                        target.setDate(target.getDate() + s.days);
+                        target.setHours(12, 0, 0, 0);
+                        const isActive =
+                          deliveryDate.toDateString() === target.toDateString();
+                        return (
+                          <TouchableOpacity
+                            key={s.label}
+                            style={[
+                              styles.shortcutChip,
+                              isActive && styles.shortcutChipActive,
+                            ]}
+                            onPress={() => {
+                              const d = new Date();
+                              d.setDate(d.getDate() + s.days);
+                              d.setHours(12, 0, 0, 0);
+                              setDeliveryDate(d);
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text
+                              style={[
+                                styles.shortcutText,
+                                isActive && styles.shortcutTextActive,
+                              ]}
+                            >
+                              {s.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setDeliveryDate(null)}
+                      style={styles.clearDateBtn}
+                    >
+                      <Text style={styles.clearDateBtnText}>Sin fecha de entrega</Text>
                     </TouchableOpacity>
-                  ))}
-                </View>
+                  </>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.setDateBtn}
+                    onPress={() => setDeliveryDate(defaultDeliveryDate())}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.setDateBtnText}>+ Asignar fecha de entrega</Text>
+                  </TouchableOpacity>
+                )}
               </>
             )}
 
@@ -587,9 +669,71 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   scheduleChipActive: { backgroundColor: "#1e40af", borderColor: "#1e40af" },
-  deliveryChipActive: { backgroundColor: "#16a34a", borderColor: "#16a34a" },
   scheduleText: { fontSize: 13, fontWeight: "600", color: "#374151" },
   scheduleTextActive: { color: "#fff" },
+
+  // Selector libre de fecha de entrega
+  datePicker: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    borderColor: "#16a34a",
+    borderRadius: 10,
+    overflow: "hidden",
+  },
+  dateArrow: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: "#f0fdf4",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dateArrowText: { fontSize: 16, color: "#16a34a", fontWeight: "700" },
+  dateDisplay: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 8,
+  },
+  dateText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#15803d",
+    textAlign: "center",
+    textTransform: "capitalize",
+  },
+  dateShortcuts: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 6,
+  },
+  shortcutChip: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 6,
+    paddingVertical: 6,
+    alignItems: "center",
+    backgroundColor: "#fff",
+  },
+  shortcutChipActive: { backgroundColor: "#16a34a", borderColor: "#16a34a" },
+  shortcutText: { fontSize: 11, fontWeight: "600", color: "#6b7280" },
+  shortcutTextActive: { color: "#fff" },
+  clearDateBtn: {
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+  clearDateBtnText: { fontSize: 12, color: "#9ca3af", textDecorationLine: "underline" },
+  setDateBtn: {
+    borderWidth: 1.5,
+    borderColor: "#16a34a",
+    borderRadius: 8,
+    padding: 12,
+    alignItems: "center",
+    backgroundColor: "#f0fdf4",
+    borderStyle: "dashed",
+  },
+  setDateBtnText: { color: "#16a34a", fontWeight: "600", fontSize: 14 },
   submitButton: {
     backgroundColor: "#1e40af",
     padding: 16,
