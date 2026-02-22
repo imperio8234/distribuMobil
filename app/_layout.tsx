@@ -1,7 +1,10 @@
 import { useEffect } from "react";
 import { Stack, router } from "expo-router";
 import { View, ActivityIndicator } from "react-native";
+import * as SplashScreen from "expo-splash-screen";
 import { useAuthStore } from "@/store/auth.store";
+
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const { user, isLoading, hydrate } = useAuthStore();
@@ -12,6 +15,9 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (isLoading) return;
+
+    SplashScreen.hideAsync();
+
     if (!user) {
       router.replace("/(auth)/login");
       return;
