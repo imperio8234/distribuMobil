@@ -21,7 +21,8 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE"
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -41,9 +42,19 @@
       "expo-asset"
     ],
     "scheme": "distrib-mvp",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "39f2e193-a9a9-425a-92a1-74fb2a89ed1e"
+      }
+    },
+    "owner": "jhon1234"
   }
 }
