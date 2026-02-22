@@ -3,6 +3,8 @@ package com.distribmvp.app
 import android.os.Build
 import android.os.Bundle
 
+import com.distribmvp.BuildConfig
+import com.distribmvp.R
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled

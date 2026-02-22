@@ -3,6 +3,7 @@ package com.distribmvp.app
 import android.app.Application
 import android.content.res.Configuration
 
+import com.distribmvp.BuildConfig
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactNativeHost
