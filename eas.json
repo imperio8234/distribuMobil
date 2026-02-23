@@ -6,11 +6,19 @@
     "preview": {
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://www.villacontrol.online/api",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAPvSbF-q19rDq4ZqGsp2mg7wQETgOHg-w"
       }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://www.villacontrol.online/api",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAPvSbF-q19rDq4ZqGsp2mg7wQETgOHg-w"
       }
     }
   }
