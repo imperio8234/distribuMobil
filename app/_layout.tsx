@@ -3,11 +3,15 @@ import { Stack, router } from "expo-router";
 import { View, ActivityIndicator } from "react-native";
 import * as SplashScreen from "expo-splash-screen";
 import { useAuthStore } from "@/store/auth.store";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const { user, isLoading, hydrate } = useAuthStore();
+
+  // Inicializa push notifications una vez que el usuario está autenticado
+  usePushNotifications(!!user);
 
   useEffect(() => {
     hydrate();

@@ -5,17 +5,23 @@ const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000/api";
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().token;
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    });
+  } catch (networkErr: any) {
+    console.error(`[API] Network error on ${endpoint}:`, networkErr?.message ?? networkErr);
+    throw new Error(`No se pudo conectar al servidor: ${networkErr?.message ?? "Error de red"}`);
+  }
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: "Error de red" }));
+    const err = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
     throw new Error(err.error ?? `Error ${response.status}`);
   }
 
@@ -122,4 +128,19 @@ export const deliveriesApi = {
 export const dashboardApi = {
   getStats: () =>
     request<{ data: import("@/types").DashboardStats }>("/dashboard"),
+};
+
+// ── Usuarios (push token + ubicación) ───────────────────────────
+export const usersApi = {
+  savePushToken: (token: string) =>
+    request<{ data: { ok: boolean } }>("/users/push-token", {
+      method: "PATCH",
+      body: JSON.stringify({ token }),
+    }),
+
+  updateLocation: (lat: number, lng: number) =>
+    request<{ data: { ok: boolean } }>("/users/location", {
+      method: "PATCH",
+      body: JSON.stringify({ lat, lng }),
+    }),
 };

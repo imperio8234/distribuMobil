@@ -10,7 +10,7 @@ import {
   Alert,
   ScrollView,
 } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import MapView, { Marker, Polyline } from "react-native-maps";
 import { router } from "expo-router";
 import { customersApi } from "@/services/api";
 import type { Customer } from "@/types";
@@ -46,7 +46,7 @@ export default function VendorClientesScreen() {
   const [routeStep, setRouteStep] = useState(0);
 
   const mapRef = useRef<MapView>(null);
-  const { location, getLocation } = useLocation();
+  const { location, getLocation, startLocationTracking, stopLocationTracking } = useLocation();
 
   const load = useCallback(async () => {
     try {
@@ -101,6 +101,7 @@ export default function VendorClientesScreen() {
     }
     setRouteStep(0);
     setRouteActive(true);
+    startLocationTracking(); // Inicia reporte de ubicación cada 30s
 
     // Centrar mapa en el primer cliente
     const first = routeOrder[0];
@@ -144,6 +145,7 @@ export default function VendorClientesScreen() {
   }
 
   function finishRoute() {
+    stopLocationTracking(); // Detiene el reporte de ubicación
     setRouteActive(false);
     setRouteMode(false);
     setRouteOrder([]);
@@ -217,6 +219,19 @@ export default function VendorClientesScreen() {
               />
             );
           })}
+
+          {/* Polilínea entre paradas de la ruta */}
+          {(routeMode || routeActive) && routeOrder.length > 1 && (
+            <Polyline
+              coordinates={routeOrder.map((c) => ({
+                latitude: c.lat,
+                longitude: c.lng,
+              }))}
+              strokeColor="#3b82f6"
+              strokeWidth={3}
+              lineDashPattern={routeActive ? undefined : [8, 4]}
+            />
+          )}
         </MapView>
 
         {/* Botón Mi ubicación */}
