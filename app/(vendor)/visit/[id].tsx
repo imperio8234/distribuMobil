@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -82,6 +82,9 @@ export default function VisitScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   const { location, getLocation } = useLocation();
+
+  // Historial colapsado: muestra 3 visitas por defecto
+  const [historyExpanded, setHistoryExpanded] = useState(false);
 
   // Al seleccionar "Pedido tomado", inicializar la fecha de entrega en mañana
   useEffect(() => {
@@ -254,12 +257,35 @@ export default function VisitScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Historial de visitas recientes */}
+        {/* Historial de visitas recientes — colapsado a 3, expandible */}
         {customer.visits && customer.visits.length > 0 && (
           <View style={styles.historyCard}>
-            <Text style={styles.historyTitle}>Últimas visitas</Text>
-            {customer.visits.map((v) => (
-              <View key={v.id} style={styles.historyRow}>
+            <View style={styles.historyHeader}>
+              <Text style={styles.historyTitle}>
+                Historial de visitas ({customer.visits.length})
+              </Text>
+              {customer.visits.length > 3 && (
+                <TouchableOpacity
+                  onPress={() => setHistoryExpanded((v) => !v)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.historyToggle}>
+                    {historyExpanded
+                      ? "Ver menos ▲"
+                      : `Ver todas (${customer.visits.length}) ▼`}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {(historyExpanded ? customer.visits : customer.visits.slice(0, 3)).map((v, idx) => (
+              <View
+                key={v.id}
+                style={[
+                  styles.historyRow,
+                  idx > 0 && styles.historyRowBorder,
+                ]}
+              >
                 <View style={styles.historyLeft}>
                   <Text style={styles.historyDate}>
                     {new Date(v.visitedAt).toLocaleDateString("es-CO", {
@@ -298,6 +324,17 @@ export default function VisitScreen() {
                 )}
               </View>
             ))}
+
+            {!historyExpanded && customer.visits.length > 3 && (
+              <TouchableOpacity
+                style={styles.historyShowMore}
+                onPress={() => setHistoryExpanded(true)}
+              >
+                <Text style={styles.historyShowMoreText}>
+                  + {customer.visits.length - 3} visitas más
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -584,16 +621,33 @@ const styles = StyleSheet.create({
     elevation: 2,
     gap: 2,
   },
-  historyTitle: { fontSize: 14, fontWeight: "700", color: "#374151", marginBottom: 8 },
+  historyHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  historyTitle: { fontSize: 14, fontWeight: "700", color: "#374151" },
+  historyToggle: { fontSize: 12, fontWeight: "600", color: "#2563eb" },
   historyRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
     gap: 8,
   },
+  historyRowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: "#f3f4f6",
+  },
+  historyShowMore: {
+    marginTop: 6,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#f3f4f6",
+    alignItems: "center",
+  },
+  historyShowMoreText: { fontSize: 12, fontWeight: "600", color: "#2563eb" },
   historyLeft: { flex: 1, gap: 2 },
   historyDate: { fontSize: 13, fontWeight: "600", color: "#374151" },
   historyReason: { fontSize: 12, color: "#9ca3af" },
