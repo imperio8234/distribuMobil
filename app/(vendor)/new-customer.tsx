@@ -8,6 +8,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -55,15 +56,30 @@ export default function NewCustomerScreen() {
 
     setLoading(true);
     try {
-      await customersApi.create({
-        name: name.trim(),
+      const res = await customersApi.create({
+        name:      name.trim(),
         ownerName: ownerName.trim() || undefined,
-        phone: phone.trim() || undefined,
-        address: address.trim() || undefined,
-        lat: location.lat,
-        lng: location.lng,
-        notes: notes.trim() || undefined,
+        phone:     phone.trim() || undefined,
+        address:   address.trim() || undefined,
+        lat:       location.lat,
+        lng:       location.lng,
+        notes:     notes.trim() || undefined,
       });
+
+      // Subir foto si se tomó una
+      if (photoUri && res.data?.id) {
+        try {
+          await customersApi.uploadPhoto(res.data.id, photoUri);
+        } catch {
+          // La foto falló pero el cliente ya fue creado — no es crítico
+          Alert.alert(
+            "Cliente guardado",
+            `"${name}" fue agregado pero no se pudo subir la foto. Puedes intentarlo de nuevo desde la ficha del cliente.`,
+            [{ text: "OK", onPress: () => router.back() }]
+          );
+          return;
+        }
+      }
 
       Alert.alert("Cliente registrado", `"${name}" fue agregado exitosamente.`, [
         { text: "OK", onPress: () => router.back() },
@@ -143,12 +159,19 @@ export default function NewCustomerScreen() {
         )}
       </TouchableOpacity>
 
-      {/* Botón foto */}
-      <TouchableOpacity style={styles.photoButton} onPress={pickPhoto}>
-        <Text style={styles.photoText}>
-          {photoUri ? "Foto de fachada tomada" : "Tomar foto de fachada"}
-        </Text>
-      </TouchableOpacity>
+      {/* Foto de fachada */}
+      {photoUri ? (
+        <TouchableOpacity onPress={pickPhoto} style={styles.photoPreviewContainer}>
+          <Image source={{ uri: photoUri }} style={styles.photoPreview} />
+          <View style={styles.photoOverlay}>
+            <Text style={styles.photoOverlayText}>Cambiar foto</Text>
+          </View>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity style={styles.photoButton} onPress={pickPhoto}>
+          <Text style={styles.photoText}>📷  Tomar foto de fachada</Text>
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity
         style={[styles.saveButton, loading && styles.saveDisabled]}
@@ -186,12 +209,34 @@ const styles = StyleSheet.create({
   photoButton: {
     borderWidth: 1.5,
     borderColor: "#1e40af",
-    padding: 14,
+    borderStyle: "dashed",
+    padding: 16,
     borderRadius: 8,
     alignItems: "center",
     marginTop: 8,
   },
-  photoText: { color: "#1e40af", fontWeight: "600" },
+  photoText: { color: "#1e40af", fontWeight: "600", fontSize: 14 },
+  photoPreviewContainer: {
+    marginTop: 8,
+    borderRadius: 8,
+    overflow: "hidden",
+    height: 160,
+  },
+  photoPreview: {
+    width: "100%",
+    height: 160,
+    resizeMode: "cover",
+  },
+  photoOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    paddingVertical: 6,
+    alignItems: "center",
+  },
+  photoOverlayText: { color: "#fff", fontSize: 13, fontWeight: "600" },
   saveButton: {
     backgroundColor: "#1e40af",
     padding: 16,

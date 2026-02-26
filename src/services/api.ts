@@ -56,6 +56,34 @@ export const customersApi = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
+
+  uploadPhoto: async (customerId: string, imageUri: string) => {
+    const token = useAuthStore.getState().token;
+
+    const formData = new FormData();
+    // React Native requiere el objeto { uri, type, name } para subir archivos
+    formData.append("photo", {
+      uri:  imageUri,
+      type: "image/jpeg",
+      name: "photo.jpg",
+    } as unknown as Blob);
+
+    const response = await fetch(`${BASE_URL}/customers/${customerId}/photo`, {
+      method:  "POST",
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        // No incluir Content-Type — fetch lo pone automáticamente con el boundary
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: "Error al subir foto" }));
+      throw new Error(err.error ?? "Error al subir foto");
+    }
+
+    return response.json() as Promise<{ data: { photoUrl: string } }>;
+  },
 };
 
 // ── Visitas ─────────────────────────────────────────────────────
