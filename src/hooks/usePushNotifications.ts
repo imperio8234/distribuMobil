@@ -45,14 +45,24 @@ export function usePushNotifications(enabled: boolean = true) {
   }, []);
 
   useEffect(() => {
-    if (!enabled || registeredRef.current) return;
-    registeredRef.current = true;
-    registerAndSavePushToken();
+    if (!enabled) return;
+    let cancelled = false;
+    registerAndSavePushToken()
+      .then((ok) => {
+        if (ok && !cancelled) registeredRef.current = true;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [enabled]);
 }
 
-async function registerAndSavePushToken() {
-  if (!Device.isDevice) return;
+// projectId de EAS (app.json extra.eas.projectId) — necesario para getExpoPushTokenAsync
+const EAS_PROJECT_ID = "39f2e193-a9a9-425a-92a1-74fb2a89ed1e";
+
+async function registerAndSavePushToken(): Promise<boolean> {
+  if (!Device.isDevice) return false;
 
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("default", {
@@ -71,19 +81,30 @@ async function registerAndSavePushToken() {
     finalStatus = status;
   }
 
-  if (finalStatus !== "granted") return;
+  if (finalStatus !== "granted") {
+    console.warn("[Push] Permisos de notificación no concedidos.");
+    return false;
+  }
 
   try {
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ??
-      Constants.easConfig?.projectId;
+      (Constants as unknown as { easConfig?: { projectId?: string } }).easConfig?.projectId ??
+      EAS_PROJECT_ID;
 
-    const tokenData = await Notifications.getExpoPushTokenAsync(
-      projectId ? { projectId } : undefined
-    );
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId,
+    });
+
+    if (!tokenData?.data) {
+      console.warn("[Push] No se obtuvo token de Expo.");
+      return false;
+    }
 
     await usersApi.savePushToken(tokenData.data);
+    return true;
   } catch (err) {
     console.warn("[Push] No se pudo registrar el push token:", err);
+    return false;
   }
 }

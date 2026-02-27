@@ -1,6 +1,6 @@
 export type Role = "ADMIN" | "VENDOR" | "DELIVERY";
 export type VisitResult = "ORDER_TAKEN" | "NOT_HOME" | "REFUSED";
-export type OrderStatus = "PENDING" | "IN_DELIVERY" | "DELIVERED" | "CANCELLED";
+export type OrderStatus = "PENDING_REVIEW" | "PENDING" | "IN_DELIVERY" | "DELIVERED" | "CANCELLED";
 export type DeliveryStatus = "PENDING" | "DELIVERED" | "FAILED";
 export type ColdStatus = "HOT" | "WARM" | "COLD" | "FROZEN";
 export interface AuthUser {
@@ -27,6 +27,14 @@ export interface Customer {
   daysSinceVisit: number | null;
   assignedVendor: { id: string; name: string } | null;
   notes: string | null;
+  // Facturación electrónica
+  requiresInvoice:       boolean;
+  billingId:             string | null;
+  billingIdType:         string | null;
+  billingLegalOrg:       string | null;
+  billingTribute:        string | null;
+  billingMunicipalityId: string | null;
+  billingEmail:          string | null;
 }
 
 export interface CreateVisitPayload {
@@ -85,23 +93,33 @@ export interface CustomerDetail extends Customer {
   visits: RecentVisit[];
 }
 
-export interface CreateCustomerPayload {
-  name: string;
-  ownerName?: string;
-  phone?: string;
-  address?: string;
-  lat: number;
-  lng: number;
-  photoUrl?: string;
-  notes?: string;
+export interface BillingPayload {
+  requiresInvoice?:       boolean;
+  billingId?:             string;
+  billingIdType?:         string;
+  billingLegalOrg?:       string;
+  billingTribute?:        string;
+  billingMunicipalityId?: string;
+  billingEmail?:          string;
 }
 
-export interface UpdateCustomerPayload {
-  name?: string;
+export interface CreateCustomerPayload extends BillingPayload {
+  name:       string;
   ownerName?: string;
-  phone?: string;
-  address?: string;
-  notes?: string;
+  phone?:     string;
+  address?:   string;
+  lat:        number;
+  lng:        number;
+  photoUrl?:  string;
+  notes?:     string;
+}
+
+export interface UpdateCustomerPayload extends BillingPayload {
+  name?:      string;
+  ownerName?: string;
+  phone?:     string;
+  address?:   string;
+  notes?:     string;
 }
 
 export interface DashboardStats {

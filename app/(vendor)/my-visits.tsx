@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { vendorApi } from "@/services/api";
 import type { MyVisitsData, CompletedVisit, PendingItem, CustomerAlert } from "@/types";
 
@@ -47,6 +47,13 @@ export default function MyVisitsScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Volver a cargar las listas cuando la pantalla se enfoca de nuevo
+      load();
+    }, [load])
+  );
 
   if (loading) {
     return (

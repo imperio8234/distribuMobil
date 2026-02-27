@@ -1,7 +1,18 @@
+import { useEffect } from "react";
 import { Tabs } from "expo-router";
 import { Text } from "react-native";
+import { useLocation } from "@/hooks/useLocation";
 
 export default function VendorLayout() {
+  const { startLocationTracking, stopLocationTracking } = useLocation();
+
+  useEffect(() => {
+    startLocationTracking();
+    return () => stopLocationTracking();
+    // Solo al montar/desmontar el layout de vendedor
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <Tabs
       screenOptions={{

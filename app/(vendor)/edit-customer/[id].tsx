@@ -8,6 +8,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Switch,
 } from "react-native";
 import { useLocalSearchParams, router, Stack } from "expo-router";
 import { customersApi } from "@/services/api";
@@ -15,13 +16,22 @@ import { customersApi } from "@/services/api";
 export default function EditCustomerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]   = useState(false);
 
-  const [name, setName] = useState("");
+  const [name, setName]           = useState("");
   const [ownerName, setOwnerName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [notes, setNotes] = useState("");
+  const [phone, setPhone]         = useState("");
+  const [address, setAddress]     = useState("");
+  const [notes, setNotes]         = useState("");
+
+  // ── Facturación electrónica ──────────────────────────────
+  const [requiresInvoice, setRequiresInvoice]             = useState(false);
+  const [billingId, setBillingId]                         = useState("");
+  const [billingIdType, setBillingIdType]                 = useState("3");
+  const [billingLegalOrg, setBillingLegalOrg]             = useState("2");
+  const [billingTribute, setBillingTribute]               = useState("21");
+  const [billingMunicipalityId, setBillingMunicipalityId] = useState("");
+  const [billingEmail, setBillingEmail]                   = useState("");
 
   useEffect(() => {
     customersApi
@@ -32,6 +42,14 @@ export default function EditCustomerScreen() {
         setPhone(data.phone ?? "");
         setAddress(data.address ?? "");
         setNotes(data.notes ?? "");
+        // Billing
+        setRequiresInvoice(data.requiresInvoice ?? false);
+        setBillingId(data.billingId ?? "");
+        setBillingIdType(data.billingIdType ?? "3");
+        setBillingLegalOrg(data.billingLegalOrg ?? "2");
+        setBillingTribute(data.billingTribute ?? "21");
+        setBillingMunicipalityId(data.billingMunicipalityId ?? "");
+        setBillingEmail(data.billingEmail ?? "");
       })
       .catch(() => Alert.alert("Error", "No se pudo cargar el cliente"))
       .finally(() => setLoading(false));
@@ -45,11 +63,21 @@ export default function EditCustomerScreen() {
     setSaving(true);
     try {
       await customersApi.update(id, {
-        name: name.trim(),
+        name:      name.trim(),
         ownerName: ownerName.trim() || undefined,
-        phone: phone.trim() || undefined,
-        address: address.trim() || undefined,
-        notes: notes.trim() || undefined,
+        phone:     phone.trim() || undefined,
+        address:   address.trim() || undefined,
+        notes:     notes.trim() || undefined,
+        // Facturación
+        requiresInvoice,
+        ...(requiresInvoice ? {
+          billingId:             billingId.trim() || undefined,
+          billingIdType,
+          billingLegalOrg,
+          billingTribute,
+          billingMunicipalityId: billingMunicipalityId.trim() || undefined,
+          billingEmail:          billingEmail.trim() || undefined,
+        } : {}),
       });
       Alert.alert("Guardado", "Los datos del cliente fueron actualizados.", [
         { text: "OK", onPress: () => router.back() },
@@ -122,6 +150,113 @@ export default function EditCustomerScreen() {
           textAlignVertical="top"
         />
 
+        {/* ── Facturación electrónica ───────────────────────── */}
+        <View style={styles.sectionDivider} />
+        <View style={styles.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.switchLabel}>¿Requiere factura electrónica?</Text>
+            <Text style={styles.switchHint}>El cliente pide factura DIAN</Text>
+          </View>
+          <Switch
+            value={requiresInvoice}
+            onValueChange={setRequiresInvoice}
+            trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
+            thumbColor="#fff"
+          />
+        </View>
+
+        {requiresInvoice && (
+          <View style={styles.billingSection}>
+            <Text style={styles.billingTitle}>Datos de facturación</Text>
+
+            <Text style={styles.label}>Tipo de documento</Text>
+            <View style={styles.segmentRow}>
+              {[
+                { label: "CC", value: "3" },
+                { label: "NIT", value: "6" },
+                { label: "Pasaporte", value: "7" },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.segment, billingIdType === opt.value && styles.segmentActive]}
+                  onPress={() => setBillingIdType(opt.value)}
+                >
+                  <Text style={[styles.segmentText, billingIdType === opt.value && styles.segmentTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.label}>Número de identificación</Text>
+            <TextInput
+              style={styles.input}
+              value={billingId}
+              onChangeText={setBillingId}
+              placeholder="Ej: 123456789"
+              keyboardType="numeric"
+              placeholderTextColor="#9ca3af"
+            />
+
+            <Text style={styles.label}>Tipo de persona</Text>
+            <View style={styles.segmentRow}>
+              {[
+                { label: "Natural", value: "2" },
+                { label: "Jurídica", value: "1" },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.segment, billingLegalOrg === opt.value && styles.segmentActive]}
+                  onPress={() => setBillingLegalOrg(opt.value)}
+                >
+                  <Text style={[styles.segmentText, billingLegalOrg === opt.value && styles.segmentTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.label}>Régimen tributario</Text>
+            <View style={styles.segmentRow}>
+              {[
+                { label: "No resp. IVA", value: "21" },
+                { label: "Resp. IVA", value: "1" },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.segment, billingTribute === opt.value && styles.segmentActive]}
+                  onPress={() => setBillingTribute(opt.value)}
+                >
+                  <Text style={[styles.segmentText, billingTribute === opt.value && styles.segmentTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.label}>ID Municipio (Factus)</Text>
+            <TextInput
+              style={styles.input}
+              value={billingMunicipalityId}
+              onChangeText={setBillingMunicipalityId}
+              placeholder="Ej: 980 (Bogotá)"
+              keyboardType="numeric"
+              placeholderTextColor="#9ca3af"
+            />
+
+            <Text style={styles.label}>Email para factura</Text>
+            <TextInput
+              style={styles.input}
+              value={billingEmail}
+              onChangeText={setBillingEmail}
+              placeholder="cliente@correo.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              placeholderTextColor="#9ca3af"
+            />
+          </View>
+        )}
+
         <TouchableOpacity
           style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
           onPress={handleSave}
@@ -154,6 +289,35 @@ const styles = StyleSheet.create({
     color: "#111827",
   },
   textarea: { height: 88 },
+  // Facturación
+  sectionDivider: { height: 1, backgroundColor: "#e5e7eb", marginTop: 20, marginBottom: 4 },
+  switchRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: "#fff", borderRadius: 8, padding: 14,
+    borderWidth: 1, borderColor: "#e5e7eb", marginTop: 4,
+  },
+  switchLabel: { fontSize: 14, fontWeight: "600", color: "#374151" },
+  switchHint: { fontSize: 12, color: "#9ca3af", marginTop: 2 },
+  billingSection: {
+    backgroundColor: "#f0f9ff",
+    borderRadius: 8,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#bae6fd",
+    marginTop: 8,
+    gap: 2,
+  },
+  billingTitle: { fontSize: 13, fontWeight: "700", color: "#0369a1", marginBottom: 4 },
+  segmentRow: { flexDirection: "row", gap: 8, marginTop: 6 },
+  segment: {
+    flex: 1, paddingVertical: 10, borderRadius: 8,
+    borderWidth: 1, borderColor: "#e5e7eb", backgroundColor: "#fff",
+    alignItems: "center",
+  },
+  segmentActive: { backgroundColor: "#1e40af", borderColor: "#1e40af" },
+  segmentText: { fontSize: 13, fontWeight: "600", color: "#374151" },
+  segmentTextActive: { color: "#fff" },
+  // Botón
   saveBtn: {
     backgroundColor: "#1e40af",
     padding: 16,

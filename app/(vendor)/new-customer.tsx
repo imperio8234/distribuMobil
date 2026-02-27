@@ -9,20 +9,31 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Switch,
 } from "react-native";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { customersApi } from "@/services/api";
 import { useLocation } from "@/hooks/useLocation";
+
 export default function NewCustomerScreen() {
-  const [name, setName] = useState("");
+  const [name, setName]           = useState("");
   const [ownerName, setOwnerName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [notes, setNotes] = useState("");
-  const [photoUri, setPhotoUri] = useState<string | undefined>();
-  const [loading, setLoading] = useState(false);
+  const [phone, setPhone]         = useState("");
+  const [address, setAddress]     = useState("");
+  const [notes, setNotes]         = useState("");
+  const [photoUri, setPhotoUri]   = useState<string | undefined>();
+  const [loading, setLoading]     = useState(false);
   const { location, loading: locLoading, getLocation } = useLocation();
+
+  // ── Facturación electrónica ──────────────────────────────
+  const [requiresInvoice, setRequiresInvoice]             = useState(false);
+  const [billingId, setBillingId]                         = useState("");
+  const [billingIdType, setBillingIdType]                 = useState("3"); // CC por defecto
+  const [billingLegalOrg, setBillingLegalOrg]             = useState("2"); // Natural
+  const [billingTribute, setBillingTribute]               = useState("21"); // No resp IVA
+  const [billingMunicipalityId, setBillingMunicipalityId] = useState("");
+  const [billingEmail, setBillingEmail]                   = useState("");
 
   async function pickPhoto() {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -64,6 +75,16 @@ export default function NewCustomerScreen() {
         lat:       location.lat,
         lng:       location.lng,
         notes:     notes.trim() || undefined,
+        // Facturación
+        requiresInvoice,
+        ...(requiresInvoice ? {
+          billingId:             billingId.trim() || undefined,
+          billingIdType,
+          billingLegalOrg,
+          billingTribute,
+          billingMunicipalityId: billingMunicipalityId.trim() || undefined,
+          billingEmail:          billingEmail.trim() || undefined,
+        } : {}),
       });
 
       // Subir foto si se tomó una
@@ -71,7 +92,6 @@ export default function NewCustomerScreen() {
         try {
           await customersApi.uploadPhoto(res.data.id, photoUri);
         } catch {
-          // La foto falló pero el cliente ya fue creado — no es crítico
           Alert.alert(
             "Cliente guardado",
             `"${name}" fue agregado pero no se pudo subir la foto. Puedes intentarlo de nuevo desde la ficha del cliente.`,
@@ -173,6 +193,113 @@ export default function NewCustomerScreen() {
         </TouchableOpacity>
       )}
 
+      {/* ── Facturación electrónica ───────────────────────── */}
+      <View style={styles.sectionDivider} />
+      <View style={styles.switchRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.switchLabel}>¿Requiere factura electrónica?</Text>
+          <Text style={styles.switchHint}>El cliente pide factura DIAN</Text>
+        </View>
+        <Switch
+          value={requiresInvoice}
+          onValueChange={setRequiresInvoice}
+          trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
+          thumbColor="#fff"
+        />
+      </View>
+
+      {requiresInvoice && (
+        <View style={styles.billingSection}>
+          <Text style={styles.billingTitle}>Datos de facturación</Text>
+
+          <Text style={styles.label}>Tipo de documento</Text>
+          <View style={styles.segmentRow}>
+            {[
+              { label: "CC", value: "3" },
+              { label: "NIT", value: "6" },
+              { label: "Pasaporte", value: "7" },
+            ].map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.segment, billingIdType === opt.value && styles.segmentActive]}
+                onPress={() => setBillingIdType(opt.value)}
+              >
+                <Text style={[styles.segmentText, billingIdType === opt.value && styles.segmentTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.label}>Número de identificación</Text>
+          <TextInput
+            style={styles.input}
+            value={billingId}
+            onChangeText={setBillingId}
+            placeholder="Ej: 123456789"
+            keyboardType="numeric"
+            placeholderTextColor="#9ca3af"
+          />
+
+          <Text style={styles.label}>Tipo de persona</Text>
+          <View style={styles.segmentRow}>
+            {[
+              { label: "Natural", value: "2" },
+              { label: "Jurídica", value: "1" },
+            ].map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.segment, billingLegalOrg === opt.value && styles.segmentActive]}
+                onPress={() => setBillingLegalOrg(opt.value)}
+              >
+                <Text style={[styles.segmentText, billingLegalOrg === opt.value && styles.segmentTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.label}>Régimen tributario</Text>
+          <View style={styles.segmentRow}>
+            {[
+              { label: "No resp. IVA", value: "21" },
+              { label: "Resp. IVA", value: "1" },
+            ].map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.segment, billingTribute === opt.value && styles.segmentActive]}
+                onPress={() => setBillingTribute(opt.value)}
+              >
+                <Text style={[styles.segmentText, billingTribute === opt.value && styles.segmentTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.label}>ID Municipio (Factus)</Text>
+          <TextInput
+            style={styles.input}
+            value={billingMunicipalityId}
+            onChangeText={setBillingMunicipalityId}
+            placeholder="Ej: 980 (Bogotá)"
+            keyboardType="numeric"
+            placeholderTextColor="#9ca3af"
+          />
+
+          <Text style={styles.label}>Email para factura</Text>
+          <TextInput
+            style={styles.input}
+            value={billingEmail}
+            onChangeText={setBillingEmail}
+            placeholder="cliente@correo.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            placeholderTextColor="#9ca3af"
+          />
+        </View>
+      )}
+
       <TouchableOpacity
         style={[styles.saveButton, loading && styles.saveDisabled]}
         onPress={handleSave}
@@ -190,7 +317,7 @@ export default function NewCustomerScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f9fafb" },
-  content: { padding: 20, gap: 6 },
+  content: { padding: 20, gap: 6, paddingBottom: 40 },
   label: { fontSize: 13, fontWeight: "600", color: "#374151", marginTop: 10 },
   input: {
     borderWidth: 1,
@@ -216,27 +343,42 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   photoText: { color: "#1e40af", fontWeight: "600", fontSize: 14 },
-  photoPreviewContainer: {
-    marginTop: 8,
-    borderRadius: 8,
-    overflow: "hidden",
-    height: 160,
-  },
-  photoPreview: {
-    width: "100%",
-    height: 160,
-    resizeMode: "cover",
-  },
+  photoPreviewContainer: { marginTop: 8, borderRadius: 8, overflow: "hidden", height: 160 },
+  photoPreview: { width: "100%", height: 160, resizeMode: "cover" },
   photoOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    paddingVertical: 6,
-    alignItems: "center",
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    backgroundColor: "rgba(0,0,0,0.45)", paddingVertical: 6, alignItems: "center",
   },
   photoOverlayText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+  // Sección facturación
+  sectionDivider: { height: 1, backgroundColor: "#e5e7eb", marginTop: 20, marginBottom: 4 },
+  switchRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: "#fff", borderRadius: 8, padding: 14,
+    borderWidth: 1, borderColor: "#e5e7eb", marginTop: 4,
+  },
+  switchLabel: { fontSize: 14, fontWeight: "600", color: "#374151" },
+  switchHint: { fontSize: 12, color: "#9ca3af", marginTop: 2 },
+  billingSection: {
+    backgroundColor: "#f0f9ff",
+    borderRadius: 8,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#bae6fd",
+    marginTop: 8,
+    gap: 2,
+  },
+  billingTitle: { fontSize: 13, fontWeight: "700", color: "#0369a1", marginBottom: 4 },
+  segmentRow: { flexDirection: "row", gap: 8, marginTop: 6 },
+  segment: {
+    flex: 1, paddingVertical: 10, borderRadius: 8,
+    borderWidth: 1, borderColor: "#e5e7eb", backgroundColor: "#fff",
+    alignItems: "center",
+  },
+  segmentActive: { backgroundColor: "#1e40af", borderColor: "#1e40af" },
+  segmentText: { fontSize: 13, fontWeight: "600", color: "#374151" },
+  segmentTextActive: { color: "#fff" },
+  // Botón guardar
   saveButton: {
     backgroundColor: "#1e40af",
     padding: 16,

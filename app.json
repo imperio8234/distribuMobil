@@ -39,7 +39,15 @@
           "cameraPermission": "Necesitamos la cámara para tomar fotos de fachada de nuevos clientes."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#1e40af",
+          "defaultChannel": "default"
+        }
+      ]
     ],
     "scheme": "distrib-mvp",
     "platforms": [

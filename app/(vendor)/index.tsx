@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useAuthStore } from "@/store/auth.store";
 import { vendorApi } from "@/services/api";
 import type { VendorStats, CustomerAlert, PendingItem } from "@/types";
@@ -51,6 +51,13 @@ export default function VendorHomeScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Recargar stats y listas cada vez que la pantalla vuelve a estar en foco
+      load();
+    }, [load])
+  );
 
   const hour = new Date().getHours();
   const greeting =
